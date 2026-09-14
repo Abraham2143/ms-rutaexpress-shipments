@@ -31,3 +31,20 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local secrets and Oracle Wallet ###
+.env
+.env.*
+*[Ww][Aa][Ll][Ll][Ee][Tt]*
+secrets/
+*.sso
+*.p12
+*.pfx
+*.jks
+*.pem
+*.key
+tnsnames.ora
+sqlnet.ora
+ojdbc.properties
+application-local.*
+application-secrets.*
