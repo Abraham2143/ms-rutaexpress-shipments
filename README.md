@@ -1,85 +1,93 @@
-# ms-rutaexpress-shipments
+﻿# ms-rutaexpress-shipments
 
-## Docker
+Microservicio Java 21 / Spring Boot 4.1.1, Oracle Autonomous Database,
+OAuth2 Resource Server Microsoft Entra ID, puerto 8081.
 
-Construcción multi-stage con Maven 3.9 y Java 21; runtime Eclipse Temurin
-21 JRE (sin Maven ni código fuente), ejecutado como UID/GID `10001:10001`.
-El build ejecuta los tests; no necesita Oracle ni una Wallet real.
+- [Despliegue en EC2, variables, Wallet, Docker y Compose](docs/DEPLOYMENT.md)
+- [Contrato HTTP requerido de Catalog y límites transaccionales](docs/CATALOG-CONTRACT.md)
 
-```sh
-docker build -t ms-rutaexpress-shipments .
-```
+## API y permisos
 
-Configura las variables en tu entorno antes de ejecutar (ejemplo Bash):
-
-```sh
-export DB_URL='jdbc:oracle:thin:@rutaexpress_medium?TNS_ADMIN=/opt/oracle/wallet'
-export CATALOG_BASE_URL='http://catalog:8082'
-# Define DB_USERNAME, DB_PASSWORD, AZURE_ISSUER_URI y AZURE_JWK_SET_URI
-# con los valores reales de tu entorno, sin guardarlos en el repositorio.
-export WALLET_PATH='/ruta/absoluta/a/la/wallet'
-
-docker run --rm --name ms-rutaexpress-shipments \
-  -p 8081:8081 \
-  -e DB_URL -e DB_USERNAME -e DB_PASSWORD \
-  -e AZURE_ISSUER_URI -e AZURE_JWK_SET_URI \
-  -e CATALOG_BASE_URL \
-  --mount "type=bind,source=${WALLET_PATH},target=/opt/oracle/wallet,readonly" \
-  ms-rutaexpress-shipments
-```
-
-En PowerShell define variables con `$env:DB_URL = '...'`, usa
-`$env:WALLET_PATH` en el montaje y ejecuta el comando en una línea o usa
-el acento grave para continuarlo, en lugar de `\`.
-
-| Variable | Uso |
+| Método y path | Roles permitidos |
 | --- | --- |
-| `DB_URL` | JDBC Oracle con `TNS_ADMIN=/opt/oracle/wallet`. |
-| `DB_USERNAME` | Usuario Oracle. |
-| `DB_PASSWORD` | Contraseña Oracle. |
-| `AZURE_ISSUER_URI` | Issuer exacto del JWT de Entra ID. |
-| `CATALOG_BASE_URL` | URL HTTP de Catalog accesible desde el contenedor. |
-| `AZURE_JWK_SET_URI` | URL `jwks_uri` publicada en los metadatos OpenID del tenant. Necesaria con la configuración de seguridad actual: si se omite, el decoder intenta consultar localhost:8080. |
+| `POST /api/shipments` | `ADMIN`, `CLIENT` |
+| `GET /api/shipments/{id}` | `ADMIN`, `DISPATCHER`, `CLIENT`, `Auditor` |
+| `PUT /api/shipments/{id}/status` | `ADMIN`, `DISPATCHER` |
+| `GET /api/shipments?status=...&from=...&to=...` | `ADMIN`, `DISPATCHER`, `CLIENT`, `Auditor` |
+| `GET /actuator/health` | Público; solo estado, sin detalles |
 
-La aplicación conserva sus validaciones JWT, roles y endpoints. No se
-configuran credenciales durante el build. `JPA_DDL_AUTO` es opcional y
-conserva el valor predeterminado `update`; puede usarse `validate` cuando
-el esquema ya esté aprovisionado. Mantén `SERVER_PORT` sin definir para usar 8081.
+Se conserva `Auditor` como lectura heredada del README.AGENT.md; no se exige
+crearlo en Entra ni se implementa un servicio Audit. Los nombres operativos
+anteriores Admin/Operador/Cliente se sustituyen por los roles reales indicados
+para el despliegue: ADMIN/DISPATCHER/CLIENT. No se añaden reglas de propiedad
+por cliente: las consultas conservan el alcance existente para esos roles.
 
-### Oracle Wallet
+El claim `roles` se convierte a authorities `ROLE_<valor>` respetando mayúsculas.
+Todas las peticiones de la API requieren Bearer JWT válido; se validan firma
+RS256, issuer exacto, vigencia y pertenencia de `AZURE_AUDIENCE` a `aud`.
+El servicio es stateless. Las claves se descubren desde el issuer al recibir
+el primer JWT; `AZURE_JWK_SET_URI` es un override opcional, sin fallback local.
+[Referencia Spring Security](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html).
 
-La Wallet se monta únicamente en runtime, en `/opt/oracle/wallet`, como
-solo lectura. Nunca se copia dentro de la imagen. El alias
-`rutaexpress_medium` debe existir en el `tnsnames.ora` de la Wallet y sus
-referencias a archivos deben ser válidas dentro del contenedor, sin rutas
-absolutas de Windows. El usuario UID 10001 necesita permisos de lectura
-y acceso al directorio montado. El JAR incluye `oraclepki` para soportar
-la Wallet, con versión administrada por Spring Boot.
+Crear envío:
 
-`.dockerignore` limita el contexto a los archivos de construcción y excluye
-Wallets y formatos habituales de secretos incluso dentro de `src`.
-`.gitignore` también los excluye; no elimina archivos ya versionados.
-
-### Catalog y conectividad
-
-`CATALOG_BASE_URL` se aplica al cliente HTTP existente. Se conserva
-`http://localhost:8082` como fallback para desarrollo fuera de Docker.
-Dentro de Docker, localhost apunta al propio contenedor: define siempre
-la URL de Catalog. Para usar `http://catalog:8082`, conecta ambos
-contenedores a la misma red Docker y asigna a Catalog el nombre/alias
-`catalog`; añade `--network NOMBRE_RED` al comando anterior. No se incluye
-Compose ni se modifica Catalog. El contenedor necesita conectividad a
-Oracle, Catalog y al endpoint HTTPS de claves de Entra ID.
-
-### Validación
-
-```sh
-mvn clean test
-mvn clean package
-docker build -t ms-rutaexpress-shipments .
+```json
+{
+  "clienteId": "cliente-001",
+  "destinatarioNombre": "Ana Pérez",
+  "destinatarioEmail": "ana@example.com",
+  "direccionOrigen": "Bodega Central",
+  "direccionDestino": "Av. Ejemplo 123",
+  "servicioId": 1
+}
 ```
 
-Si Maven no está instalado, usa `./mvnw` o `./mvnw.cmd` en Windows.
-El build Docker requiere Docker Engine activo y acceso a los registros
-de imágenes y repositorios Maven. La conexión real y autenticación se
-validan en runtime con las variables y Wallet del entorno.
+Respuesta `201` con DTO: id, trackingNumber, datos anteriores, `status: CREADO`,
+fechaCreacion, fechaAceptacion/fechaEntrega inicialmente nulas y creadoPor
+obtenido del JWT. El tracking es único y se genera en backend.
+
+Cambiar estado:
+
+```json
+{"status": "ACEPTADO"}
+```
+
+Filtros de fecha ISO `yyyy-MM-dd` sobre fechaCreacion, inclusivos por día:
+`GET /api/shipments?status=CREADO&from=2026-09-01&to=2026-09-14`.
+Cada filtro es opcional; un rango invertido, fecha o estado inválido produce
+400. Se ordena por creación descendente. Se conservan fechas sin zona del
+modelo original; usar una misma zona operativa en los despliegues.
+
+## Estados
+
+Flujo normal: `CREADO -> ACEPTADO -> EN_BODEGA -> EN_RUTA -> ENTREGADO`.
+Cancelación desde `CREADO`, `ACEPTADO` o `EN_BODEGA` hacia `CANCELADO`.
+No se permiten saltos, retrocesos ni repetición de estados. `ENTREGADO` y
+`CANCELADO` son terminales. `EN_RUTA` exige fecha de aceptación registrada.
+
+Al aceptar se llama sincrónicamente a Catalog con el mismo JWT recibido.
+Solo un HTTP 204 confirma el descuento antes de guardar ACEPTADO. Los cambios
+se serializan mediante bloqueo pesimista de la fila. Consultar el contrato
+para idempotencia, fallos entre servicios y cancelaciones posteriores.
+
+Errores: 400 validación/transición; 401 JWT ausente/inválido; 403 permisos;
+404 envío/servicio inexistente; 409 capacidad/conflicto de persistencia;
+502 integración Catalog. No se exponen respuestas internas de Catalog.
+
+## Build
+
+```sh
+./mvnw clean test
+./mvnw clean package
+docker build -t rutaexpress-shipments .
+```
+
+En Windows usar `./mvnw.cmd`. Docker es multi-stage Maven/Java 21 y JRE 21,
+usuario 10001:10001 y puerto 8081. Wallet y secretos se montan/proporcionan
+solo al ejecutar, nunca al construir. Ver la guía EC2 para comandos completos.
+
+Las pruebas ejecutan lógica de estados, repositorios en H2 (solo tests),
+seguridad con JWT firmados temporalmente y un servidor HTTP local de prueba
+para discovery/JWKS y Catalog, incluidos errores, timeout y concurrencia.
+No necesitan Oracle ni Entra reales. No constituyen una validación contra
+los servicios desplegados.

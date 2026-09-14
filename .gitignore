@@ -48,3 +48,5 @@ sqlnet.ora
 ojdbc.properties
 application-local.*
 application-secrets.*
+*.zip
+*.log

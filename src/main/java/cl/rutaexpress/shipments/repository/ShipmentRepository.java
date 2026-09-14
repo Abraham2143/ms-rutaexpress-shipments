@@ -4,6 +4,8 @@ import cl.rutaexpress.shipments.entity.Shipment;
 import cl.rutaexpress.shipments.entity.ShipmentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
@@ -11,6 +13,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from Shipment s where s.id = :id")
+    Optional<Shipment> findByIdForUpdate(@Param("id") Long id);
+
     boolean existsByTrackingNumber(String trackingNumber);
 
     Optional<Shipment> findByTrackingNumber(String trackingNumber);
@@ -19,7 +25,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
         select s from Shipment s
         where (:status is null or s.estado = :status)
           and (:fromDate is null or s.fechaCreacion >= :fromDate)
-          and (:toDate is null or s.fechaCreacion <= :toDate)
+          and (:toDate is null or s.fechaCreacion < :toDate)
         order by s.fechaCreacion desc
         """)
     List<Shipment> search(@Param("status") ShipmentStatus status,

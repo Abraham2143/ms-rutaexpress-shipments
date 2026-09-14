@@ -15,6 +15,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.Arrays;
+import java.util.stream.Stream;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,6 +35,42 @@ class ShipmentServiceImplTest {
     private CatalogClient catalogClient;
 
     private ShipmentServiceImpl service;
+
+    static Stream<Arguments> transitions() {
+        Set<String> allowed = Set.of("CREADO:ACEPTADO", "CREADO:CANCELADO", "ACEPTADO:EN_BODEGA",
+                "ACEPTADO:CANCELADO", "EN_BODEGA:EN_RUTA", "EN_BODEGA:CANCELADO", "EN_RUTA:ENTREGADO");
+        return Arrays.stream(ShipmentStatus.values()).flatMap(from -> Arrays.stream(ShipmentStatus.values())
+                .map(to -> Arguments.of(from, to, allowed.contains(from + ":" + to))));
+    }
+
+    @ParameterizedTest
+    @MethodSource("transitions")
+    void checksEveryStatePair(ShipmentStatus from, ShipmentStatus to, boolean allowed) {
+        Shipment shipment = shipment(from);
+        if (from != ShipmentStatus.CREADO) shipment.setFechaAceptacion(LocalDateTime.now().minusHours(1));
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(shipment));
+        if (allowed) {
+            when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            var response = service.updateStatus(10L, to);
+            assertEquals(to, response.status());
+            if (to == ShipmentStatus.ENTREGADO) assertNotNull(response.fechaEntrega());
+            if (to == ShipmentStatus.ACEPTADO) verify(catalogClient).decrementCapacity(1L, "RUTA-TEST");
+            else verifyNoInteractions(catalogClient);
+        } else {
+            assertThrows(InvalidShipmentTransitionException.class, () -> service.updateStatus(10L, to));
+            assertEquals(from, shipment.getEstado());
+            verify(repository, never()).save(any());
+            verifyNoInteractions(catalogClient);
+        }
+    }
+
+    @Test
+    void warehouseShipmentWithoutAcceptanceCannotEnterRoute() {
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(shipment(ShipmentStatus.EN_BODEGA)));
+        assertThrows(InvalidShipmentTransitionException.class, () -> service.updateStatus(10L, ShipmentStatus.EN_RUTA));
+        verify(repository, never()).save(any());
+        verifyNoInteractions(catalogClient);
+    }
 
     @BeforeEach
     void setUp() {
@@ -56,7 +99,7 @@ class ShipmentServiceImplTest {
     @Test
     void acceptsShipmentAndDecrementsCapacity() {
         Shipment shipment = shipment(ShipmentStatus.CREADO);
-        when(repository.findById(10L)).thenReturn(Optional.of(shipment));
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(shipment));
         when(repository.save(any(Shipment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = service.updateStatus(10L, ShipmentStatus.ACEPTADO);
@@ -68,7 +111,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void rejectsCreatedToEnRuta() {
-        when(repository.findById(10L)).thenReturn(Optional.of(shipment(ShipmentStatus.CREADO)));
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(shipment(ShipmentStatus.CREADO)));
 
         assertThrows(InvalidShipmentTransitionException.class,
                 () -> service.updateStatus(10L, ShipmentStatus.EN_RUTA));
@@ -84,13 +127,13 @@ class ShipmentServiceImplTest {
 
     @Test
     void keepsShipmentCreatedWhenCatalogHasNoCapacity() {
-        when(repository.findById(10L)).thenReturn(Optional.of(shipment(ShipmentStatus.CREADO)));
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(shipment(ShipmentStatus.CREADO)));
         doThrow(new CapacityUnavailableException("sin capacidad"))
                 .when(catalogClient).decrementCapacity(1L, "RUTA-TEST");
 
         assertThrows(CapacityUnavailableException.class,
                 () -> service.updateStatus(10L, ShipmentStatus.ACEPTADO));
-        assertEquals(ShipmentStatus.CREADO, repository.findById(10L).orElseThrow().getEstado());
+        assertEquals(ShipmentStatus.CREADO, repository.findByIdForUpdate(10L).orElseThrow().getEstado());
         verify(repository, never()).save(any());
     }
 

@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -59,7 +58,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional
     public ShipmentResponse updateStatus(Long id, ShipmentStatus targetStatus) {
-        Shipment shipment = repository.findById(id)
+        Shipment shipment = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Envío no encontrado: " + id));
         ShipmentStatus currentStatus = shipment.getEstado();
         if (!TRANSITIONS.getOrDefault(currentStatus, EnumSet.noneOf(ShipmentStatus.class)).contains(targetStatus)) {
@@ -69,6 +68,9 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (targetStatus == ShipmentStatus.ACEPTADO) {
             catalogClient.decrementCapacity(shipment.getServicioId(), shipment.getTrackingNumber());
             shipment.setFechaAceptacion(LocalDateTime.now());
+        }
+        if (targetStatus == ShipmentStatus.EN_RUTA && shipment.getFechaAceptacion() == null) {
+            throw new InvalidShipmentTransitionException("EN_RUTA requiere aceptación previa registrada");
         }
         if (targetStatus == ShipmentStatus.ENTREGADO) {
             shipment.setFechaEntrega(LocalDateTime.now());
@@ -84,7 +86,8 @@ public class ShipmentServiceImpl implements ShipmentService {
             throw new IllegalArgumentException("from no puede ser posterior a to");
         }
         LocalDateTime fromDate = from == null ? null : from.atStartOfDay();
-        LocalDateTime toDate = to == null ? null : to.atTime(LocalTime.MAX);
+        // An exclusive next-day bound avoids rounding the last nanosecond in Oracle TIMESTAMP.
+        LocalDateTime toDate = to == null ? null : to.plusDays(1).atStartOfDay();
         return repository.search(status, fromDate, toDate).stream().map(ShipmentResponse::from).toList();
     }
 

@@ -5,12 +5,31 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.dao.ConcurrencyFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.OffsetDateTime;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ApiError> malformedRequest(Exception exception) {
+        return response(HttpStatus.BAD_REQUEST, "JSON, estado, identificador o fecha inválidos");
+    }
+
+    @ExceptionHandler(CatalogIntegrationException.class)
+    public ResponseEntity<ApiError> catalogFailure(CatalogIntegrationException exception) {
+        return response(HttpStatus.BAD_GATEWAY, exception.getMessage());
+    }
+
+    @ExceptionHandler({ConcurrencyFailureException.class, DataIntegrityViolationException.class})
+    public ResponseEntity<ApiError> persistenceConflict(Exception exception) {
+        return response(HttpStatus.CONFLICT, "Conflicto al guardar el envío; consulte su estado antes de reintentar");
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> validation(MethodArgumentNotValidException exception) {
         String message = exception.getBindingResult().getFieldErrors().stream()

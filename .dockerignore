@@ -7,6 +7,10 @@
 !.dockerignore
 
 # Exclude secrets even when nested inside src.
+**/*.zip
+**/target
+**/.git
+**/.idea
 **/.env
 **/.env.*
 **/*[Ww][Aa][Ll][Ll][Ee][Tt]*
