@@ -159,10 +159,10 @@ class ShipmentsHttpIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"ADMIN", "CLIENT", "DISPATCHER", "Auditor", "UNKNOWN", "Admin", "Cliente", "Operador"})
+    @ValueSource(strings = {"ADMIN", "CLIENT", "DISPATCHER", "AUDITOR", "Auditor", "UNKNOWN", "Admin", "Cliente", "Operador"})
     void mapsRealRolesAndPreservesReadOnlyAuditor(String role) throws Exception {
         String auth = "Bearer " + token(role);
-        boolean read = List.of("ADMIN", "CLIENT", "DISPATCHER", "Auditor").contains(role);
+        boolean read = List.of("ADMIN", "CLIENT", "DISPATCHER", "AUDITOR").contains(role);
         mvc.perform(get("/api/shipments").header("Authorization", auth))
                 .andExpect(status().is(read ? 200 : 403));
         mvc.perform(post("/api/shipments").header("Authorization", auth)

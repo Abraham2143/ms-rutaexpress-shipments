@@ -11,12 +11,12 @@ OAuth2 Resource Server Microsoft Entra ID, puerto 8081.
 | Método y path | Roles permitidos |
 | --- | --- |
 | `POST /api/shipments` | `ADMIN`, `CLIENT` |
-| `GET /api/shipments/{id}` | `ADMIN`, `DISPATCHER`, `CLIENT`, `Auditor` |
+| `GET /api/shipments/{id}` | `ADMIN`, `DISPATCHER`, `CLIENT`, `AUDITOR` |
 | `PUT /api/shipments/{id}/status` | `ADMIN`, `DISPATCHER` |
-| `GET /api/shipments?status=...&from=...&to=...` | `ADMIN`, `DISPATCHER`, `CLIENT`, `Auditor` |
+| `GET /api/shipments?status=...&from=...&to=...` | `ADMIN`, `DISPATCHER`, `CLIENT`, `AUDITOR` |
 | `GET /actuator/health` | Público; solo estado, sin detalles |
 
-Se conserva `Auditor` como lectura heredada del README.AGENT.md; no se exige
+El rol de solo lectura es `AUDITOR` (en mayúsculas); no se exige
 crearlo en Entra ni se implementa un servicio Audit. Los nombres operativos
 anteriores Admin/Operador/Cliente se sustituyen por los roles reales indicados
 para el despliegue: ADMIN/DISPATCHER/CLIENT. No se añaden reglas de propiedad
