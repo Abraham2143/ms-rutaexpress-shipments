@@ -1,4 +1,4 @@
-package com.rutaexpress.ms_rutaexpress_shipments;
+package cl.rutaexpress.shipments;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
