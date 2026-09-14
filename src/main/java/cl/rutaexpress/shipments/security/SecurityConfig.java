@@ -38,7 +38,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/shipments/**")
                         .hasAnyRole("DISPATCHER", "ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/shipments/**")
-                        .hasAnyRole("CLIENT", "DISPATCHER", "ADMIN", "Auditor")
+                        .hasAnyRole("CLIENT", "DISPATCHER", "ADMIN", "AUDITOR")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
