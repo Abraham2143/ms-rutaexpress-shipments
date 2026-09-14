@@ -1,0 +1,29 @@
+# Only build inputs enter the context.
+**
+!pom.xml
+!src/
+!src/**
+!Dockerfile
+!.dockerignore
+
+# Exclude secrets even when nested inside src.
+**/*.zip
+**/target
+**/.git
+**/.idea
+**/.env
+**/.env.*
+**/*[Ww][Aa][Ll][Ll][Ee][Tt]*
+**/secrets
+**/secrets/**
+**/*.sso
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.pem
+**/*.key
+**/tnsnames.ora
+**/sqlnet.ora
+**/ojdbc.properties
+**/application-local.*
+**/application-secrets.*
