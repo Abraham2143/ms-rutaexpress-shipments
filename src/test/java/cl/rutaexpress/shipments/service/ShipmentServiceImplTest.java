@@ -1,6 +1,9 @@
 package cl.rutaexpress.shipments.service;
 
 import cl.rutaexpress.shipments.client.CatalogClient;
+import cl.rutaexpress.shipments.messaging.ShipmentNotification;
+import org.springframework.context.ApplicationEventPublisher;
+import org.mockito.ArgumentCaptor;
 import cl.rutaexpress.shipments.dto.CreateShipmentRequest;
 import cl.rutaexpress.shipments.entity.Shipment;
 import cl.rutaexpress.shipments.entity.ShipmentStatus;
@@ -34,6 +37,8 @@ class ShipmentServiceImplTest {
     @Mock
     private CatalogClient catalogClient;
 
+    @Mock private ApplicationEventPublisher events;
+
     private ShipmentServiceImpl service;
 
     static Stream<Arguments> transitions() {
@@ -56,11 +61,22 @@ class ShipmentServiceImplTest {
             if (to == ShipmentStatus.ENTREGADO) assertNotNull(response.fechaEntrega());
             if (to == ShipmentStatus.ACEPTADO) verify(catalogClient).decrementCapacity(1L, "RUTA-TEST");
             else verifyNoInteractions(catalogClient);
+            if (Set.of(ShipmentStatus.ACEPTADO, ShipmentStatus.EN_RUTA, ShipmentStatus.ENTREGADO).contains(to)) {
+                var captured = ArgumentCaptor.forClass(ShipmentNotification.class);
+                verify(events).publishEvent(captured.capture());
+                assertEquals(10L, captured.getValue().shipmentId());
+                assertEquals("RUTA-TEST", captured.getValue().trackingNumber());
+                assertEquals(to, captured.getValue().status());
+                assertEquals("Ana Pérez", captured.getValue().destinatarioNombre());
+                assertEquals("ana@example.test", captured.getValue().destinatarioEmail());
+                assertNotNull(captured.getValue().timestamp());
+                verifyNoMoreInteractions(events);
+            } else verifyNoInteractions(events);
         } else {
             assertThrows(InvalidShipmentTransitionException.class, () -> service.updateStatus(10L, to));
             assertEquals(from, shipment.getEstado());
             verify(repository, never()).save(any());
-            verifyNoInteractions(catalogClient);
+            verifyNoInteractions(catalogClient, events);
         }
     }
 
@@ -74,7 +90,7 @@ class ShipmentServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ShipmentServiceImpl(repository, catalogClient);
+        service = new ShipmentServiceImpl(repository, catalogClient, events);
     }
 
     @Test
@@ -92,6 +108,7 @@ class ShipmentServiceImplTest {
         var response = service.create(request, "cliente-001");
 
         assertEquals(ShipmentStatus.CREADO, response.status());
+        verifyNoInteractions(events);
         assertTrue(response.trackingNumber().startsWith("RUTA-"));
         verify(repository).save(any(Shipment.class));
     }
@@ -135,6 +152,16 @@ class ShipmentServiceImplTest {
                 () -> service.updateStatus(10L, ShipmentStatus.ACEPTADO));
         assertEquals(ShipmentStatus.CREADO, repository.findByIdForUpdate(10L).orElseThrow().getEstado());
         verify(repository, never()).save(any());
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void persistenceFailureDoesNotEmitNotification() {
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(shipment(ShipmentStatus.EN_RUTA)));
+        when(repository.save(any(Shipment.class))).thenThrow(new org.springframework.dao.DataIntegrityViolationException("failed"));
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> service.updateStatus(10L, ShipmentStatus.ENTREGADO));
+        verifyNoInteractions(events);
     }
 
     private Shipment shipment(ShipmentStatus status) {
@@ -142,6 +169,8 @@ class ShipmentServiceImplTest {
         shipment.setId(10L);
         shipment.setTrackingNumber("RUTA-TEST");
         shipment.setServicioId(1L);
+        shipment.setDestinatarioNombre("Ana Pérez");
+        shipment.setDestinatarioEmail("ana@example.test");
         shipment.setEstado(status);
         return shipment;
     }

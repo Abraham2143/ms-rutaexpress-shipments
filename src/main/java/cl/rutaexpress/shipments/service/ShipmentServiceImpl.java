@@ -8,6 +8,8 @@ import cl.rutaexpress.shipments.entity.ShipmentStatus;
 import cl.rutaexpress.shipments.exception.InvalidShipmentTransitionException;
 import cl.rutaexpress.shipments.exception.ResourceNotFoundException;
 import cl.rutaexpress.shipments.repository.ShipmentRepository;
+import cl.rutaexpress.shipments.messaging.ShipmentNotification;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,10 +27,13 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     private final ShipmentRepository repository;
     private final CatalogClient catalogClient;
+    private final ApplicationEventPublisher events;
 
-    public ShipmentServiceImpl(ShipmentRepository repository, CatalogClient catalogClient) {
+    public ShipmentServiceImpl(ShipmentRepository repository, CatalogClient catalogClient,
+                              ApplicationEventPublisher events) {
         this.repository = repository;
         this.catalogClient = catalogClient;
+        this.events = events;
     }
 
     @Override
@@ -76,7 +81,12 @@ public class ShipmentServiceImpl implements ShipmentService {
             shipment.setFechaEntrega(LocalDateTime.now());
         }
         shipment.setEstado(targetStatus);
-        return ShipmentResponse.from(repository.save(shipment));
+        Shipment saved = repository.save(shipment);
+        if (targetStatus == ShipmentStatus.ACEPTADO || targetStatus == ShipmentStatus.EN_RUTA
+                || targetStatus == ShipmentStatus.ENTREGADO) {
+            events.publishEvent(ShipmentNotification.from(saved));
+        }
+        return ShipmentResponse.from(saved);
     }
 
     @Override
