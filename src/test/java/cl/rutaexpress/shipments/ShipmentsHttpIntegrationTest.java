@@ -39,6 +39,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {
+        "spring.rabbitmq.username=test", "spring.rabbitmq.password=test",
+        "management.health.rabbit.enabled=false",
         "spring.datasource.url=jdbc:h2:mem:http-tests;MODE=Oracle;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=",
         "spring.datasource.driver-class-name=org.h2.Driver",
@@ -110,12 +112,16 @@ class ShipmentsHttpIntegrationTest {
 
     static String issuer() { return "http://127.0.0.1:" + UPSTREAM.getAddress().getPort(); }
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
+
     @Autowired MockMvc mvc;
     @Autowired ShipmentRepository repository;
 
     @BeforeEach
     void reset() {
         repository.deleteAll();
+        org.mockito.Mockito.clearInvocations(rabbitTemplate);
         CATALOG_STATUS.set(204);
         CATALOG_CALLS.set(0);
         DELAY_MS.set(0);
@@ -225,6 +231,8 @@ class ShipmentsHttpIntegrationTest {
         assertTrue(BODY.get().contains("\"quantity\":1"));
         assertNotNull(repository.findById(shipment.getId()).orElseThrow().getFechaAceptacion());
         assertEquals(1, CATALOG_CALLS.get());
+        org.mockito.Mockito.verify(rabbitTemplate).send(org.mockito.ArgumentMatchers.eq("cmd.direct"),
+                org.mockito.ArgumentMatchers.eq("email.send"), org.mockito.ArgumentMatchers.any(org.springframework.amqp.core.Message.class));
     }
 
     @ParameterizedTest
@@ -239,6 +247,7 @@ class ShipmentsHttpIntegrationTest {
         Shipment unchanged = repository.findById(shipment.getId()).orElseThrow();
         assertEquals(ShipmentStatus.CREADO, unchanged.getEstado());
         assertNull(unchanged.getFechaAceptacion());
+        org.mockito.Mockito.verifyNoInteractions(rabbitTemplate);
     }
 
     @Test
@@ -270,6 +279,8 @@ class ShipmentsHttpIntegrationTest {
                     .stream().sorted().toList());
         }
         assertEquals(1, CATALOG_CALLS.get());
+        org.mockito.Mockito.verify(rabbitTemplate).send(org.mockito.ArgumentMatchers.eq("cmd.direct"),
+                org.mockito.ArgumentMatchers.eq("email.send"), org.mockito.ArgumentMatchers.any(org.springframework.amqp.core.Message.class));
     }
 
     private Shipment persist(ShipmentStatus status, LocalDateTime created) {
