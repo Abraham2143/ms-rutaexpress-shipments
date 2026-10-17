@@ -32,14 +32,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(auth -> auth
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/actuator/health").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/shipments")
-                        .hasAnyRole("CLIENT", "ADMIN")
-                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/shipments/**")
-                        .hasAnyRole("DISPATCHER", "ADMIN")
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/shipments/**")
-                        .hasAnyRole("CLIENT", "DISPATCHER", "ADMIN", "AUDITOR")
-                        .anyRequest().authenticated())
+                        .anyRequest().permitAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable());
