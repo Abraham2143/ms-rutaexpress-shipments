@@ -36,7 +36,7 @@ public class ShipmentController {
     @PutMapping("/{id}/status")
     public ShipmentResponse updateStatus(@PathVariable Long id,
                                          @Valid @RequestBody UpdateShipmentStatusRequest request) {
-        return service.updateStatus(id, request.status());
+        return service.updateStatus(id, request);
     }
 
     @GetMapping

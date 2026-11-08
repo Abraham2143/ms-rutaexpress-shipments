@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Shipment s where s.id = :id")
     Optional<Shipment> findByIdForUpdate(@Param("id") Long id);
@@ -20,6 +21,10 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
     boolean existsByTrackingNumber(String trackingNumber);
 
     Optional<Shipment> findByTrackingNumber(String trackingNumber);
+
+    boolean existsByClienteId(String clienteId);
+
+    List<Shipment> findByClienteId(String clienteId);
 
     @Query("""
         select s from Shipment s

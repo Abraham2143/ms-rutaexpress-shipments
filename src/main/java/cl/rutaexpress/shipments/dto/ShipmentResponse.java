@@ -18,13 +18,25 @@ public record ShipmentResponse(
         LocalDateTime fechaCreacion,
         LocalDateTime fechaAceptacion,
         LocalDateTime fechaEntrega,
-        String creadoPor
+        String creadoPor,
+        String ultimoComentario
 ) {
     public static ShipmentResponse from(Shipment shipment) {
-        return new ShipmentResponse(shipment.getId(), shipment.getTrackingNumber(), shipment.getClienteId(),
-                shipment.getDestinatarioNombre(), shipment.getDestinatarioEmail(), shipment.getDireccionOrigen(),
-                shipment.getDireccionDestino(), shipment.getServicioId(), shipment.getEstado(),
-                shipment.getFechaCreacion(), shipment.getFechaAceptacion(), shipment.getFechaEntrega(),
-                shipment.getCreadoPor());
+        return new ShipmentResponse(
+                shipment.getId(),
+                shipment.getTrackingNumber(),
+                shipment.getClienteId(),
+                shipment.getDestinatarioNombre(),
+                shipment.getDestinatarioEmail(),
+                shipment.getDireccionOrigen(),
+                shipment.getDireccionDestino(),
+                shipment.getServicioId(),
+                shipment.getEstado(),
+                shipment.getFechaCreacion(),
+                shipment.getFechaAceptacion(),
+                shipment.getFechaEntrega(),
+                shipment.getCreadoPor(),
+                shipment.getUltimoComentario()
+        );
     }
 }

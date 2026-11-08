@@ -50,4 +50,7 @@ public class Shipment {
 
     @Column(name = "CREADO_POR", length = 150)
     private String creadoPor;
+
+    @Column(name = "ULTIMO_COMENTARIO", length = 500)
+    private String ultimoComentario;
 }
