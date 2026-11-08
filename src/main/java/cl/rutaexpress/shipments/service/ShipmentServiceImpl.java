@@ -3,15 +3,16 @@ package cl.rutaexpress.shipments.service;
 import cl.rutaexpress.shipments.client.CatalogClient;
 import cl.rutaexpress.shipments.dto.CreateShipmentRequest;
 import cl.rutaexpress.shipments.dto.ShipmentResponse;
+import cl.rutaexpress.shipments.dto.UpdateShipmentStatusRequest;
 import cl.rutaexpress.shipments.entity.Shipment;
 import cl.rutaexpress.shipments.entity.ShipmentStatus;
+import cl.rutaexpress.shipments.dto.ShipmentNotification;
 import cl.rutaexpress.shipments.exception.InvalidShipmentTransitionException;
 import cl.rutaexpress.shipments.exception.ResourceNotFoundException;
 import cl.rutaexpress.shipments.repository.ShipmentRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import cl.rutaexpress.shipments.messaging.ShipmentNotification;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumMap;
@@ -29,7 +30,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final ApplicationEventPublisher events;
 
     public ShipmentServiceImpl(ShipmentRepository repository, CatalogClient catalogClient,
-                              ApplicationEventPublisher events) {
+                               ApplicationEventPublisher events) {
         this.repository = repository;
         this.catalogClient = catalogClient;
         this.events = events;
@@ -49,7 +50,12 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.setEstado(ShipmentStatus.CREADO);
         shipment.setFechaCreacion(LocalDateTime.now());
         shipment.setCreadoPor(createdBy);
-        return ShipmentResponse.from(repository.save(shipment));
+
+        Shipment saved = repository.save(shipment);
+
+        events.publishEvent(ShipmentNotification.from(saved));
+
+        return ShipmentResponse.from(saved);
     }
 
     @Override
@@ -61,30 +67,58 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
+    public ShipmentResponse updateStatus(Long id, UpdateShipmentStatusRequest request) {
+        return updateStatusInternal(id, request.status(), request.comment());
+    }
+
+    @Override
+    @Transactional
     public ShipmentResponse updateStatus(Long id, ShipmentStatus targetStatus) {
+        return updateStatusInternal(id, targetStatus, null);
+    }
+
+    private ShipmentResponse updateStatusInternal(Long id, ShipmentStatus targetStatus, String comment) {
         Shipment shipment = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Envío no encontrado: " + id));
+
         ShipmentStatus currentStatus = shipment.getEstado();
+
         if (!TRANSITIONS.getOrDefault(currentStatus, EnumSet.noneOf(ShipmentStatus.class)).contains(targetStatus)) {
             throw new InvalidShipmentTransitionException(
                     "Transición no permitida: " + currentStatus + " -> " + targetStatus);
         }
+
+        if (comment != null && !comment.isBlank()) {
+            shipment.setUltimoComentario(comment);
+        }
+
         if (targetStatus == ShipmentStatus.ACEPTADO) {
             catalogClient.decrementCapacity(shipment.getServicioId(), shipment.getTrackingNumber());
             shipment.setFechaAceptacion(LocalDateTime.now());
         }
+
         if (targetStatus == ShipmentStatus.EN_RUTA && shipment.getFechaAceptacion() == null) {
             throw new InvalidShipmentTransitionException("EN_RUTA requiere aceptación previa registrada");
         }
+
         if (targetStatus == ShipmentStatus.ENTREGADO) {
             shipment.setFechaEntrega(LocalDateTime.now());
         }
+
         shipment.setEstado(targetStatus);
         Shipment saved = repository.save(shipment);
+
         if (targetStatus == ShipmentStatus.ACEPTADO || targetStatus == ShipmentStatus.EN_RUTA
              || targetStatus == ShipmentStatus.ENTREGADO) {
           events.publishEvent(ShipmentNotification.from(saved));
         }
+
+
+        if (targetStatus == ShipmentStatus.ACEPTADO || targetStatus == ShipmentStatus.EN_BODEGA
+                || targetStatus == ShipmentStatus.EN_RUTA || targetStatus == ShipmentStatus.ENTREGADO) {
+            events.publishEvent(ShipmentNotification.from(saved));
+        }
+
         return ShipmentResponse.from(saved);
     }
 
@@ -95,7 +129,6 @@ public class ShipmentServiceImpl implements ShipmentService {
             throw new IllegalArgumentException("from no puede ser posterior a to");
         }
         LocalDateTime fromDate = from == null ? null : from.atStartOfDay();
-        // An exclusive next-day bound avoids rounding the last nanosecond in Oracle TIMESTAMP.
         LocalDateTime toDate = to == null ? null : to.plusDays(1).atStartOfDay();
         return repository.search(status, fromDate, toDate).stream().map(ShipmentResponse::from).toList();
     }
