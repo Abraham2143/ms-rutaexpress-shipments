@@ -22,8 +22,15 @@ class ShipmentNotificationPublisherTest {
     private final RabbitTemplate rabbit = mock(RabbitTemplate.class);
     private final JsonMapper mapper = JsonMapper.builder().build();
     private final ShipmentNotificationPublisher publisher = new ShipmentNotificationPublisher(rabbit, mapper);
-    private final ShipmentNotification event = new ShipmentNotification(42L, "RUTA-TEST", ShipmentStatus.ACEPTADO,
-            "Ana Pérez", "ana@example.test", Instant.parse("2026-10-16T02:00:00Z"));
+    private final ShipmentNotification event = new ShipmentNotification(
+            42L,
+            "RUTA-TEST",
+            ShipmentStatus.ACEPTADO,
+            "Ana Pérez",
+            "ana@example.test",
+            null,
+            Instant.parse("2026-10-16T02:00:00Z")
+    );
 
     @Test
     void sendsExactJsonAndPersistentUtf8MetadataToOfficialRoute() {
@@ -36,7 +43,7 @@ class ShipmentNotificationPublisherTest {
         assertEquals(mapper.readTree("""
                 {"shipmentId":42,"trackingNumber":"RUTA-TEST","status":"ACEPTADO",
                  "destinatarioNombre":"Ana Pérez","destinatarioEmail":"ana@example.test",
-                 "timestamp":"2026-10-16T02:00:00Z"}
+                 "comment":null,"timestamp":"2026-10-16T02:00:00Z"}
                 """), json);
         assertEquals("application/json", message.getMessageProperties().getContentType());
         assertEquals("UTF-8", message.getMessageProperties().getContentEncoding());
