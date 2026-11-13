@@ -109,7 +109,8 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.setEstado(targetStatus);
         Shipment saved = repository.save(shipment);
 
-        events.publishEvent(ShipmentNotification.from(saved));
+        String cleanComment = (comment != null && !comment.isBlank()) ? comment.trim() : null;
+        events.publishEvent(ShipmentNotification.from(saved, cleanComment));
 
         return ShipmentResponse.from(saved);
     }
