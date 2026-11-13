@@ -107,7 +107,7 @@ class ShipmentServiceImplTest {
         var response = service.create(request, "cliente-001");
 
         assertEquals(ShipmentStatus.CREADO, response.status());
-        verifyNoInteractions(events);
+        verify(events).publishEvent(any());
         assertTrue(response.trackingNumber().startsWith("RUTA-"));
         verify(repository).save(any(Shipment.class));
     }

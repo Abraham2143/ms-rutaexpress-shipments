@@ -13,6 +13,7 @@ import cl.rutaexpress.shipments.repository.ShipmentRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumMap;
@@ -108,16 +109,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.setEstado(targetStatus);
         Shipment saved = repository.save(shipment);
 
-        if (targetStatus == ShipmentStatus.ACEPTADO || targetStatus == ShipmentStatus.EN_RUTA
-             || targetStatus == ShipmentStatus.ENTREGADO) {
-          events.publishEvent(ShipmentNotification.from(saved));
-        }
-
-
-        if (targetStatus == ShipmentStatus.ACEPTADO || targetStatus == ShipmentStatus.EN_BODEGA
-                || targetStatus == ShipmentStatus.EN_RUTA || targetStatus == ShipmentStatus.ENTREGADO) {
-            events.publishEvent(ShipmentNotification.from(saved));
-        }
+        events.publishEvent(ShipmentNotification.from(saved));
 
         return ShipmentResponse.from(saved);
     }
