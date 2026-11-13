@@ -139,7 +139,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         transitions.put(ShipmentStatus.CREADO, EnumSet.of(ShipmentStatus.ACEPTADO, ShipmentStatus.CANCELADO));
         transitions.put(ShipmentStatus.ACEPTADO, EnumSet.of(ShipmentStatus.EN_BODEGA, ShipmentStatus.CANCELADO));
         transitions.put(ShipmentStatus.EN_BODEGA, EnumSet.of(ShipmentStatus.EN_RUTA, ShipmentStatus.CANCELADO));
-        transitions.put(ShipmentStatus.EN_RUTA, EnumSet.of(ShipmentStatus.ENTREGADO));
+        transitions.put(ShipmentStatus.EN_RUTA, EnumSet.of(ShipmentStatus.ENTREGADO, ShipmentStatus.CANCELADO));
         transitions.put(ShipmentStatus.ENTREGADO, EnumSet.noneOf(ShipmentStatus.class));
         transitions.put(ShipmentStatus.CANCELADO, EnumSet.noneOf(ShipmentStatus.class));
         return transitions;
