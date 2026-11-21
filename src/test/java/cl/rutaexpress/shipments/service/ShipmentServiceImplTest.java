@@ -1,5 +1,7 @@
 package cl.rutaexpress.shipments.service;
 
+import cl.rutaexpress.shipments.messaging.ShipmentNotification;
+
 import cl.rutaexpress.shipments.client.CatalogClient;
 import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.ArgumentCaptor;
@@ -42,7 +44,7 @@ class ShipmentServiceImplTest {
 
     static Stream<Arguments> transitions() {
         Set<String> allowed = Set.of("CREADO:ACEPTADO", "CREADO:CANCELADO", "ACEPTADO:EN_BODEGA",
-                "ACEPTADO:CANCELADO", "EN_BODEGA:EN_RUTA", "EN_BODEGA:CANCELADO", "EN_RUTA:ENTREGADO");
+                "ACEPTADO:CANCELADO", "EN_BODEGA:EN_RUTA", "EN_BODEGA:CANCELADO", "EN_RUTA:ENTREGADO", "EN_RUTA:CANCELADO");
         return Arrays.stream(ShipmentStatus.values()).flatMap(from -> Arrays.stream(ShipmentStatus.values())
                 .map(to -> Arguments.of(from, to, allowed.contains(from + ":" + to))));
     }
@@ -107,7 +109,8 @@ class ShipmentServiceImplTest {
         var response = service.create(request, "cliente-001");
 
         assertEquals(ShipmentStatus.CREADO, response.status());
-        verify(events).publishEvent(any());
+        // any(Class) selecciona publishEvent(Object); any() a secas apunta a publishEvent(ApplicationEvent).
+        verify(events).publishEvent(any(ShipmentNotification.class));
         assertTrue(response.trackingNumber().startsWith("RUTA-"));
         verify(repository).save(any(Shipment.class));
     }

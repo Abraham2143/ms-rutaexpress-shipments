@@ -191,3 +191,47 @@ No acreditan Oracle real ni el recorrido RabbitMQ -> Notify desplegado.
 
 Verificación ejecutada con Java 21: `.\mvnw.cmd -B -ntp clean verify` terminó
 con BUILD SUCCESS: 79 pruebas, 0 fallos, 0 errores, 0 omitidas, y JAR generado.
+
+## Eventos Kafka
+
+Además del correo por RabbitMQ, Shipments publica en Kafka **cada creación y cada cambio
+de estado** de un envío. Los consume `kafka-analytics` (repositorio `ms-rutaexpress-report`),
+que calcula estadísticas por estado.
+
+- `ShipmentEventKafkaPublisher` escucha el mismo evento interno que el publicador de
+  RabbitMQ, con `@TransactionalEventListener(AFTER_COMMIT)`: solo publica cambios ya
+  confirmados en Oracle. Los dos publicadores son independientes.
+- Tópico `rutaexpress.shipments.events.v1`, key = `shipmentId`, para que los eventos de un
+  envío queden ordenados en la misma partición.
+- Contrato `ShipmentEventV1` de `ms-rutaexpress-report/docs/EVENT_CONTRACTS.md`.
+  `eventType` es `SHIPMENT_CREATED` para `CREADO` y `SHIPMENT_STATUS_CHANGED` para el resto.
+  El `eventId` es determinista (envío + estado + instante), así kafka-analytics descarta duplicados.
+- El evento **no** lleva nombre, correo ni comentario del destinatario: solo identificadores y estado.
+- Productor con `acks=all` e idempotencia. Si Kafka no responde, `send()` espera como
+  máximo `KAFKA_MAX_BLOCK_MS` (5 s), registra `kafka_event_publish_failed` y la respuesta
+  REST no cambia. No hay reintento ni outbox: un evento puede perderse si Kafka está caído.
+- Shipments no crea tópicos: los crea `kafka-init-topics` en el compose de `ms-rutaexpress-audit`.
+
+| Variable | Uso |
+| --- | --- |
+| KAFKA_ENABLED | `false` por defecto. Con `true` se activa el publicador |
+| KAFKA_BOOTSTRAP_SERVERS | `localhost:9092` por defecto; brokers separados por coma |
+| KAFKA_TOPIC_SHIPMENTS | `rutaexpress.shipments.events.v1` por defecto |
+| KAFKA_MAX_BLOCK_MS | `5000` por defecto; espera máxima si el broker no responde |
+
+Está desactivado por defecto para que un despliegue sin Kafka no cambie su comportamiento.
+
+### Prueba local del flujo Shipments → Kafka → kafka-analytics
+
+1. En `ms-rutaexpress-audit`: `docker compose up -d` y
+   `docker compose -f docker-compose.kafka-ui.yml up -d`.
+2. En `ms-rutaexpress-report`: `docker compose up -d --build`.
+3. Ejecutar Shipments con sus variables habituales más
+   `KAFKA_ENABLED=true` y `KAFKA_BOOTSTRAP_SERVERS=localhost:9092,localhost:9093,localhost:9094`.
+4. Crear un envío y cambiarle el estado. El log de Shipments muestra `result=kafka_event_published`.
+5. En Kafka-UI (http://localhost:8089) aparecen los mensajes en `rutaexpress.shipments.events.v1`,
+   y en http://localhost:8091/api/v1/analytics/summary los conteos por estado.
+
+`ShipmentEventKafkaPublisherTest` cubre el contrato, la key, la ausencia de datos personales,
+el `eventId` determinista, los fallos síncronos y asíncronos del broker y la activación por
+`KAFKA_ENABLED`, con `KafkaTemplate` simulado.

@@ -101,12 +101,15 @@ class ShipmentNotificationTransactionTest {
         assertEquals(ShipmentStatus.EN_RUTA, repository.findById(original.getId()).orElseThrow().getEstado());
     }
 
+    // Desde "Enviar un correo unico por cada cambio de estado" todo cambio de estado notifica,
+    // también EN_BODEGA y CANCELADO.
     @ParameterizedTest
     @EnumSource(value = ShipmentStatus.class, names = {"EN_BODEGA", "CANCELADO"})
-    void nonNotifyingStatesDoNotPublish(ShipmentStatus target) {
+    void everyStatusChangePublishesExactlyOneNotification(ShipmentStatus target) {
         Shipment original = persist(ShipmentStatus.ACEPTADO);
         service.updateStatus(original.getId(), target);
-        verifyNoInteractions(rabbit);
+        verify(rabbit).send(eq("cmd.direct"), eq("email.send"), any(Message.class));
+        verifyNoMoreInteractions(rabbit);
     }
 
     @Test void invalidTransitionDoesNotPublish() {
