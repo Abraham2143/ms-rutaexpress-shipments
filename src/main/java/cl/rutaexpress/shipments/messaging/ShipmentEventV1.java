@@ -17,12 +17,25 @@ public record ShipmentEventV1(
         String eventType,
         @JsonFormat(shape = JsonFormat.Shape.STRING) Instant occurredAt,
         String shipmentId,
+        String clienteId,
+        String trackingNumber,
         String status,
         String correlationId) {
 
     public static final String SCHEMA_VERSION = "1.0";
     public static final String SHIPMENT_CREATED = "SHIPMENT_CREATED";
     public static final String SHIPMENT_STATUS_CHANGED = "SHIPMENT_STATUS_CHANGED";
+
+    public ShipmentEventV1(
+            String schemaVersion,
+            String eventId,
+            String eventType,
+            Instant occurredAt,
+            String shipmentId,
+            String status,
+            String correlationId) {
+        this(schemaVersion, eventId, eventType, occurredAt, shipmentId, null, null, status, correlationId);
+    }
 
     public static ShipmentEventV1 from(ShipmentNotification notification) {
         String shipmentId = String.valueOf(notification.shipmentId());
@@ -33,6 +46,8 @@ public record ShipmentEventV1(
                 notification.status() == ShipmentStatus.CREADO ? SHIPMENT_CREATED : SHIPMENT_STATUS_CHANGED,
                 notification.timestamp(),
                 shipmentId,
+                notification.clienteId(),
+                notification.trackingNumber(),
                 status,
                 null);
     }

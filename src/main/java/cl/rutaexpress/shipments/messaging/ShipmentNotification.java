@@ -7,6 +7,7 @@ import java.time.Instant;
 
 public record ShipmentNotification(
         Long shipmentId,
+        String clienteId,
         String trackingNumber,
         ShipmentStatus status,
         String destinatarioNombre,
@@ -14,13 +15,26 @@ public record ShipmentNotification(
         String comment,
         @JsonFormat(shape = JsonFormat.Shape.STRING) Instant timestamp) {
 
+    public ShipmentNotification(
+            Long shipmentId,
+            String trackingNumber,
+            ShipmentStatus status,
+            String destinatarioNombre,
+            String destinatarioEmail,
+            String comment,
+            Instant timestamp) {
+        this(shipmentId, null, trackingNumber, status, destinatarioNombre, destinatarioEmail, comment, timestamp);
+    }
+
     public static ShipmentNotification from(Shipment shipment) {
         return from(shipment, null);
     }
 
     public static ShipmentNotification from(Shipment shipment, String comment) {
+        String clienteId = shipment.getClienteId() != null ? String.valueOf(shipment.getClienteId()) : null;
         return new ShipmentNotification(
                 shipment.getId(),
+                clienteId,
                 shipment.getTrackingNumber(),
                 shipment.getEstado(),
                 shipment.getDestinatarioNombre(),
